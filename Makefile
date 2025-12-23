@@ -7,7 +7,9 @@ SRC = main.c \
       allocator/best_fit.c \
       allocator/worst_fit.c \
       allocator/my_sbrk.c \
-      observability/memory_dump.c
+      observability/memory_dump.c \
+      stats/stats.c
+
 
 
 OUT = memsim.exe

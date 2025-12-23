@@ -1,6 +1,6 @@
 #include "allocator.h"
 #include "my_malloc.h"
-
+#include "../stats/stats.h"
 #include "first_fit.h"
 #include "best_fit.h"
 #include "worst_fit.h"
@@ -19,34 +19,37 @@ void set_allocator_strategy(alloc_strategy_t strategy)
 /* Override my_malloc */
 void* my_malloc(size_t size)
 {
-    void* ptr = NULL;
+    total_alloc_requests++;
+
+    void* result = NULL;
 
     switch (current_strategy)
     {
         case ALLOC_FIRST_FIT:
-            ptr = first_fit_malloc(size);
+            result = first_fit_malloc(size);
             break;
 
         case ALLOC_BEST_FIT:
-            ptr = best_fit_malloc(size);
+            result = best_fit_malloc(size);
             break;
 
         case ALLOC_WORST_FIT:
-            ptr = worst_fit_malloc(size);
+            result = worst_fit_malloc(size);
             break;
 
         case ALLOC_BUDDY:
-            ptr = NULL; /* later */
+            result = NULL; /* later */
             break;
     }
 
-    if (ptr)
-        ERRNO = NO_ERROR;
+    if (result)
+        successful_allocs++;
     else
-        ERRNO = OUT_OF_MEMORY;
+        failed_allocs++;
 
-    return ptr;
+    return result;
 }
+
 
 
 /* Override my_free */

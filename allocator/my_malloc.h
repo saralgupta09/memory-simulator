@@ -4,6 +4,9 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "allocator.h"
+extern void*  heap;
+extern size_t heap_size;
+
 
 /* Metadata structure (DO NOT CHANGE) */
 typedef struct metadata

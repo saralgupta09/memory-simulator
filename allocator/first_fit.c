@@ -6,7 +6,7 @@
 #define MIN_BLOCK_SIZE (sizeof(metadata_t) + 8)
 
 /* SINGLE heap definition */
-void* heap = NULL;
+// void* heap = NULL;
 
 /* Initialize heap once */
 static void init_heap(void)

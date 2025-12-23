@@ -1,35 +1,44 @@
 #include <errno.h>
 #include <stdlib.h>
+#include <stddef.h>
 
-/* emulates a call to the system call sbrk(2) */
+#define HEAP_SIZE 0x2000   /* 8192 bytes total heap */
 
-/* we emulate for ease of debugging - if the allocator used the system
- * call sbrk then we would need to redefine the system malloc call to 
- * be ours instead to avoid conflicts. if our library did not work correctly,
- * then printf could not even perform simple tasks since it internally
- * dynamically allocates memory when formatting strings!! :-)
+/* ===== GLOBAL HEAP STATE ===== */
+void*  heap = NULL;
+size_t heap_size = 0;
+
+/*
+ * Emulated sbrk
  */
+void* my_sbrk(int increment)
+{
+    static char* fake_heap = NULL;
+    static int   current_top = 0;
+    void* ret;
 
-/* 0x2000 base 16 = 8192 base 10 = 8 KB */
-#define HEAP_SIZE 0x2000
+    if (fake_heap == NULL)
+    {
+        fake_heap = calloc(HEAP_SIZE, 1);
+        if (!fake_heap)
+        {
+            errno = ENOMEM;
+            return (void*)-1;
+        }
 
-void *my_sbrk(int increment) {
-
-  static char *fake_heap = NULL;
-  static int current_top_of_heap = 0;
-  void *ret_val;
-
-  if(fake_heap == NULL){
-    if((fake_heap = calloc(HEAP_SIZE, 1)) == NULL) {
-      return (void*)-1;
+        heap = fake_heap;
+        heap_size = 0;
     }
-  }
-  ret_val=current_top_of_heap+fake_heap;
-  if ((current_top_of_heap + increment > HEAP_SIZE) 
-      || (current_top_of_heap+increment < 0)) {
-    errno=ENOMEM;
-    return (void*)-1;
-  }
-  current_top_of_heap += increment;
-  return ret_val;
+
+    if (current_top + increment > HEAP_SIZE || current_top + increment < 0)
+    {
+        errno = ENOMEM;
+        return (void*)-1;
+    }
+
+    ret = fake_heap + current_top;
+    current_top += increment;
+    heap_size += increment;   // ✅ THIS is what stats reads
+
+    return ret;
 }
