@@ -21,13 +21,17 @@ void dump_memory(void)
 
     char *current = (char *)heap;
 
-    /* 
-     * NOTE:
+    /*
      * The heap grows in chunks of 2048 bytes (SBRK_SIZE).
      * For now, we assume a single chunk.
-     * We will generalize this later if needed.
      */
     char *heap_end = current + 2048;
+
+    /* ---- statistics ---- */
+    size_t total_used = 0;
+    size_t total_free = 0;
+    int used_blocks = 0;
+    int free_blocks = 0;
 
     while (current < heap_end)
     {
@@ -42,6 +46,9 @@ void dump_memory(void)
                    (unsigned long)start,
                    (unsigned long)end,
                    (size_t)block->size);
+
+            total_used += block->size;
+            used_blocks++;
         }
         else
         {
@@ -49,11 +56,23 @@ void dump_memory(void)
                    (unsigned long)start,
                    (unsigned long)end,
                    (size_t)block->size);
+
+            total_free += block->size;
+            free_blocks++;
         }
 
         /* Move to the next block */
         current += block->size;
     }
 
-    printf("=================================\n\n");
+    printf("=================================\n");
+
+    /* ---- summary ---- */
+    printf("\n----------- SUMMARY -----------\n");
+    printf("Total heap size : %zu bytes\n", total_used + total_free);
+    printf("Used memory     : %zu bytes\n", total_used);
+    printf("Free memory     : %zu bytes\n", total_free);
+    printf("Used blocks     : %d\n", used_blocks);
+    printf("Free blocks     : %d\n", free_blocks);
+    printf("--------------------------------\n\n");
 }
