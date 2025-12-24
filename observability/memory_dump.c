@@ -4,6 +4,14 @@
 #include "../allocator/my_malloc.h"
 #include "memory_dump.h"
 
+/* cache integration */
+#include "../cache/cache.h"
+
+/* use the global cache levels */
+extern CacheLevel L1;
+extern CacheLevel L2;
+extern CacheLevel L3;
+
 /*
  * Dump the current memory layout by walking the heap linearly.
  * We start from the beginning of the heap and move forward
@@ -35,7 +43,11 @@ void dump_memory(void)
 
     while (current < heap_end)
     {
+        /* reading block metadata = memory access */
         metadata_t *block = (metadata_t *)current;
+
+        /* simulate cache access to this block header */
+        cache_hierarchy_access(&L1, &L2, &L3, (uint64_t)current);
 
         uintptr_t start = (uintptr_t)current;
         uintptr_t end   = start + block->size - 1;
@@ -76,3 +88,4 @@ void dump_memory(void)
     printf("Free blocks     : %d\n", free_blocks);
     printf("--------------------------------\n\n");
 }
+    

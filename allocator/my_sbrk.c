@@ -2,11 +2,11 @@
 #include <stdlib.h>
 #include <stddef.h>
 
-#define HEAP_SIZE 0x2000   /* 8192 bytes total heap */
+/* ===== GLOBAL HEAP STATE (declared, NOT defined) ===== */
+extern void*  heap;
+extern size_t heap_size;
 
-/* ===== GLOBAL HEAP STATE ===== */
-void*  heap = NULL;
-size_t heap_size = 0;
+#define HEAP_SIZE 0x2000   /* 8192 bytes total heap */
 
 /*
  * Emulated sbrk
@@ -38,7 +38,7 @@ void* my_sbrk(int increment)
 
     ret = fake_heap + current_top;
     current_top += increment;
-    heap_size += increment;   // ✅ THIS is what stats reads
+    heap_size += increment;   // stats still read this
 
     return ret;
 }

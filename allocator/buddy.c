@@ -1,5 +1,7 @@
 #include "my_malloc.h"
 #include <stdint.h>
+#include <stdio.h>
+
 #define SBRK_SIZE 2048
 
 #ifdef DEBUG
@@ -8,9 +10,13 @@
 #define DEBUG_PRINT(x)
 #endif
 
-void* heap;
+/* =========================
+   GLOBAL HEAP OWNERSHIP
+   ========================= */
+void* heap = NULL;
+size_t heap_size = 0;
 
-// enum my_malloc_err ERRNO = NO_ERROR;
+/* Buddy freelist */
 metadata_t* freelist[8];
 
 /* --- helper functions unchanged --- */
@@ -143,7 +149,7 @@ void* buddy_malloc(size_t size)
 {
     size = sizeof(metadata_t) + size;
 
-    if (size > 2048)
+    if (size > SBRK_SIZE)
     {
         ERRNO = SINGLE_REQUEST_TOO_LARGE;
         return NULL;
@@ -152,14 +158,21 @@ void* buddy_malloc(size_t size)
     if (!heap)
     {
         heap = my_sbrk(SBRK_SIZE);
+        if (!heap)
+        {
+            ERRNO = OUT_OF_MEMORY;
+            return NULL;
+        }
+
+        /* SET HEAP SIZE ONCE */
+        heap_size = SBRK_SIZE;
+
         freelist[7] = (metadata_t*)heap;
         freelist[7]->in_use = 0;
         freelist[7]->size = SBRK_SIZE;
         freelist[7]->next = NULL;
         freelist[7]->prev = NULL;
     }
-
-    if (!heap) return NULL;
 
     int index = get_index(size);
 
@@ -175,39 +188,23 @@ void* buddy_malloc(size_t size)
         split_memory(index, next_index, freelist[next_index]);
         return remove_and_return_block(index);
     }
-    else
-    {
-        void* heap_ptr = my_sbrk(SBRK_SIZE);
-        if (heap_ptr == (void*)-1)
-        {
-            ERRNO = OUT_OF_MEMORY;
-            return NULL;
-        }
 
-        metadata_t* new_heap = (metadata_t*)heap_ptr;
-        new_heap->in_use = 0;
-        new_heap->size = SBRK_SIZE;
-        new_heap->next = NULL;
-        new_heap->prev = NULL;
-
-        add_to_freelist(7, new_heap);
-        split_memory(index, 7, freelist[7]);
-
-        return remove_and_return_block(index);
-    }
+    ERRNO = OUT_OF_MEMORY;
+    return NULL;
 }
 
 void* buddy_calloc(size_t num, size_t size)
 {
-    if (num * size > 2048)
+    if (num * size > SBRK_SIZE)
     {
         ERRNO = SINGLE_REQUEST_TOO_LARGE;
         return NULL;
     }
 
     void* p = buddy_malloc(num * size);
+    if (!p) return NULL;
 
-    for (int i = 0;
+    for (size_t i = 0;
          i < (((metadata_t*)p - 1)->size - sizeof(metadata_t));
          i++)
     {
@@ -220,10 +217,12 @@ void* buddy_calloc(size_t num, size_t size)
 
 void buddy_free(void* ptr)
 {
+    if (!ptr) return;
+
     metadata_t* block = (metadata_t*)((char*)ptr - sizeof(metadata_t));
     metadata_t* buddy = get_buddy(block);
 
-    if (!buddy && !block->in_use)
+    if (!block->in_use)
     {
         ERRNO = DOUBLE_FREE_DETECTED;
         return;
@@ -262,7 +261,7 @@ void* buddy_memmove(void* dest, const void* src, size_t num_bytes)
         for (int i = num_bytes - 1; i >= 0; i--)
             d[i] = s[i];
     else
-        for (int i = 0; i < num_bytes; i++)
+        for (size_t i = 0; i < num_bytes; i++)
             d[i] = s[i];
 
     return dest;

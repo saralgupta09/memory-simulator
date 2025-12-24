@@ -3,12 +3,16 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include "allocator.h"
+
+/* =========================
+   Heap globals (declared once)
+   ========================= */
 extern void*  heap;
 extern size_t heap_size;
 
-
-/* Metadata structure (DO NOT CHANGE) */
+/* =========================
+   Metadata structure
+   ========================= */
 typedef struct metadata
 {
     short in_use;
@@ -17,7 +21,9 @@ typedef struct metadata
     struct metadata* prev;
 } metadata_t;
 
-/* Error enum (this stays here — different enum) */
+/* =========================
+   Error enum
+   ========================= */
 enum my_malloc_err {
     NO_ERROR,
     OUT_OF_MEMORY,
@@ -27,15 +33,14 @@ enum my_malloc_err {
 
 extern enum my_malloc_err ERRNO;
 
-/* Public allocator API */
+/* =========================
+   Public allocator API
+   ========================= */
 void* my_malloc(size_t size);
 void  my_free(void* ptr);
 void* my_calloc(size_t num, size_t size);
 void* my_memmove(void* dest, const void* src, size_t num_bytes);
 
 void* my_sbrk(int);
-
-/* Heap pointer (single global) */
-extern void* heap;
 
 #endif

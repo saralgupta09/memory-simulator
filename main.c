@@ -1,37 +1,42 @@
 #include <stdio.h>
-#include "allocator/my_malloc.h"
-#include "allocator/allocator.h"
-#include "observability/memory_dump.h"
-#include "stats/stats.h"
+#include <stdint.h>
+#include "cache/cache.h"
 
-void run_test(alloc_strategy_t strategy, const char* name)
-{
-    set_allocator_strategy(strategy);
+/* =========================
+   Global cache levels
+   (visible to other files)
+   ========================= */
+CacheLevel L1;
+CacheLevel L2;
+CacheLevel L3;
 
-    printf("\n=== %s ===\n", name);
+int main() {
 
-    void* a = my_malloc(100);
-    void* b = my_malloc(300);
-    void* c = my_malloc(200);
-    void* d = my_malloc(180);
+    /* Cache configuration */
+    cache_init(&L1, 32 * 1024, 64, 4);    // L1: 32KB, 4-way
+    cache_init(&L2, 256 * 1024, 64, 8);   // L2: 256KB, 8-way
+    cache_init(&L3, 1024 * 1024, 64, 16); // L3: 1MB, 16-way
 
-    dump_memory();
-    stats_collect();
-    stats_print();
+    /* Test access pattern */
+    uint64_t addresses[] = {
+        0x1000, 0x2000, 0x3000, 0x1000,
+        0x2000, 0x4000, 0x5000, 0x1000,
+        0x6000, 0x7000, 0x2000, 0x3000
+    };
 
-    my_free(b);
-    my_free(d);
+    int n = sizeof(addresses) / sizeof(addresses[0]);
 
-    dump_memory();
-    stats_collect();
-    stats_print();
-}
+    for (int i = 0; i < n; i++) {
+        cache_hierarchy_access(&L1, &L2, &L3, addresses[i]);
+    }
 
-int main(void)
-{
-    run_test(ALLOC_FIRST_FIT, "FIRST FIT");
-    run_test(ALLOC_BEST_FIT,  "BEST FIT");
-    run_test(ALLOC_WORST_FIT, "WORST FIT");
+    /* Print cache statistics */
+    cache_print_hierarchy_stats(&L1, &L2, &L3);
+
+    /* Cleanup */
+    cache_free(&L1);
+    cache_free(&L2);
+    cache_free(&L3);
 
     return 0;
 }

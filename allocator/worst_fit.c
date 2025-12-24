@@ -5,8 +5,6 @@
 #define SBRK_SIZE 2048
 #define MIN_BLOCK_SIZE (sizeof(metadata_t) + 8)
 
-extern void* heap;
-
 /* Initialize heap once */
 static void init_heap_if_needed(void)
 {
@@ -16,6 +14,9 @@ static void init_heap_if_needed(void)
     heap = my_sbrk(SBRK_SIZE);
     if (!heap)
         return;
+
+    /* set global heap size ONCE */
+    heap_size = SBRK_SIZE;
 
     metadata_t* block = (metadata_t*)heap;
     block->size = SBRK_SIZE;
@@ -71,7 +72,7 @@ void* worst_fit_malloc(size_t size)
     return (char*)worst + sizeof(metadata_t);
 }
 
-/* WORST FIT free (same logic as others) */
+/* WORST FIT free */
 void worst_fit_free(void* ptr)
 {
     if (!ptr)

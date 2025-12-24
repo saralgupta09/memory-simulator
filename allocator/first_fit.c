@@ -5,9 +5,6 @@
 #define SBRK_SIZE 2048
 #define MIN_BLOCK_SIZE (sizeof(metadata_t) + 8)
 
-/* SINGLE heap definition */
-// void* heap = NULL;
-
 /* Initialize heap once */
 static void init_heap(void)
 {
@@ -18,6 +15,9 @@ static void init_heap(void)
         ERRNO = OUT_OF_MEMORY;
         return;
     }
+
+    /* set global heap size ONCE */
+    heap_size = SBRK_SIZE;
 
     metadata_t* block = (metadata_t*)heap;
     block->size = SBRK_SIZE;
