@@ -3,17 +3,17 @@
 
 #include <stddef.h>
 
-/* Block metadata used internally by allocator */
-typedef struct block {
-    size_t start;          // offset from heap base
-    size_t size;           // size of block
-    int    free;            // 1 = free, 0 = used
-    int    id;              // allocation id
-    struct block *next;     // linked list
-} block_t;
+/* Block metadata stored INSIDE heap */
+typedef struct metadata {
+    size_t size;             // total block size (metadata + payload)
+    size_t requested_size;   // bytes requested by user
+    int    in_use;
 
-/* internal globals */
-extern block_t *block_list_head;
+    struct metadata *next;
+    struct metadata *prev;
+} metadata_t;
+
+/* global heap */
 extern void   *heap;
 extern size_t  heap_size;
 

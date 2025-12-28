@@ -2,21 +2,27 @@
 #include <stddef.h>
 
 #include "stats.h"
-#include "../allocator/my_malloc.h"
+#include "../allocator/allocator_internal.h"
 
-/* Global stats counters */
+/* =========================
+   Global allocation counters
+   ========================= */
 size_t total_alloc_requests = 0;
 size_t successful_allocs    = 0;
 size_t failed_allocs        = 0;
 
-/* Collected stats */
+/* =========================
+   Existing collected stats
+   ========================= */
 static size_t used_memory = 0;
 static size_t free_memory = 0;
 static size_t used_blocks = 0;
 static size_t free_blocks = 0;
 static size_t largest_free_block = 0;
 
-/* Reset stats before each test run */
+/* =========================
+   Reset stats
+   ========================= */
 void stats_reset(void)
 {
     total_alloc_requests = 0;
@@ -30,7 +36,9 @@ void stats_reset(void)
     largest_free_block = 0;
 }
 
-/* Walk heap and collect stats */
+/* =========================
+   Walk heap and collect base stats
+   ========================= */
 void stats_collect(void)
 {
     used_memory = 0;
@@ -39,7 +47,7 @@ void stats_collect(void)
     free_blocks = 0;
     largest_free_block = 0;
 
-    if (heap == NULL)
+    if (!heap || heap_size == 0)
         return;
 
     char* curr = (char*)heap;
@@ -48,6 +56,9 @@ void stats_collect(void)
     while (curr < heap_end)
     {
         metadata_t* block = (metadata_t*)curr;
+
+        if (block->size == 0)
+            break;  /* safety */
 
         if (block->in_use)
         {
@@ -67,7 +78,9 @@ void stats_collect(void)
     }
 }
 
-/* Print statistics */
+/* =========================
+   Print base stats
+   ========================= */
 void stats_print(void)
 {
     double utilization = 0.0;
@@ -96,4 +109,68 @@ void stats_print(void)
     printf("Failed allocs          : %zu\n", failed_allocs);
     printf("Success rate           : %.2f%%\n", success_rate);
     printf("-----------------------------\n");
+}
+
+/* =========================
+   Fragmentation stats (STEP 3)
+   ========================= */
+void frag_stats_collect(frag_stats_t *fs)
+{
+    fs->total_used = 0;
+    fs->total_free = 0;
+    fs->internal_frag = 0;
+    fs->largest_free_block = 0;
+
+    if (!heap || heap_size == 0)
+        return;
+
+    char* curr = (char*)heap;
+    char* heap_end = curr + heap_size;
+
+    while (curr < heap_end)
+    {
+        metadata_t* block = (metadata_t*)curr;
+
+        if (block->size == 0)
+            break;
+
+        if (block->in_use)
+        {
+            size_t payload_size = block->size - sizeof(metadata_t);
+            fs->total_used += block->size;
+
+            if (payload_size > block->requested_size)
+                fs->internal_frag +=
+                    (payload_size - block->requested_size);
+        }
+        else
+        {
+            fs->total_free += block->size;
+
+            if (block->size > fs->largest_free_block)
+                fs->largest_free_block = block->size;
+        }
+
+        curr += block->size;
+    }
+}
+
+/* =========================
+   Print fragmentation stats
+   ========================= */
+void frag_stats_print(const frag_stats_t *fs)
+{
+    double external_frag = 0.0;
+
+    if (fs->total_free > 0)
+        external_frag =
+            1.0 - ((double)fs->largest_free_block / fs->total_free);
+
+    printf("\n------ FRAGMENTATION STATS ------\n");
+    printf("Total used memory      : %zu bytes\n", fs->total_used);
+    printf("Total free memory      : %zu bytes\n", fs->total_free);
+    printf("Internal fragmentation : %zu bytes\n", fs->internal_frag);
+    printf("Largest free block     : %zu bytes\n", fs->largest_free_block);
+    printf("External fragmentation : %.3f\n", external_frag);
+    printf("---------------------------------\n");
 }

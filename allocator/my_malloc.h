@@ -3,6 +3,8 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include "allocator_internal.h"
+
 
 /* =========================
    Heap globals (declared once)
@@ -10,16 +12,16 @@
 extern void*  heap;
 extern size_t heap_size;
 
-/* =========================
-   Metadata structure
-   ========================= */
-typedef struct metadata
-{
-    short in_use;
-    short size;
-    struct metadata* next;
-    struct metadata* prev;
-} metadata_t;
+// /* =========================
+//    Metadata structure
+//    ========================= */
+// typedef struct metadata
+// {
+//     short in_use;
+//     short size;
+//     struct metadata* next;
+//     struct metadata* prev;
+// } metadata_t;
 
 /* =========================
    Error enum

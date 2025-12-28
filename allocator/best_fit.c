@@ -15,10 +15,11 @@ void best_fit_init(void* heap_start, size_t heap_size)
 {
     bf_head = (metadata_t*)heap_start;
 
-    bf_head->size   = heap_size;
-    bf_head->in_use = 0;
-    bf_head->next   = NULL;
-    bf_head->prev   = NULL;
+    bf_head->size           = heap_size;
+    bf_head->requested_size = 0;    /* free block */
+    bf_head->in_use         = 0;
+    bf_head->next           = NULL;
+    bf_head->prev           = NULL;
 }
 
 /* ============================
@@ -34,6 +35,7 @@ void* best_fit_malloc(size_t size)
     metadata_t* curr = bf_head;
     metadata_t* best = NULL;
 
+    /* find smallest suitable free block */
     while (curr)
     {
         if (!curr->in_use && curr->size >= total)
@@ -50,15 +52,17 @@ void* best_fit_malloc(size_t size)
         return NULL;
     }
 
+    /* split if possible */
     if (best->size >= total + MIN_BLOCK_SIZE)
     {
         metadata_t* split =
             (metadata_t*)((char*)best + total);
 
-        split->size   = best->size - total;
-        split->in_use = 0;
-        split->next   = best->next;
-        split->prev   = best;
+        split->size           = best->size - total;
+        split->requested_size = 0;     /* free block */
+        split->in_use         = 0;
+        split->next           = best->next;
+        split->prev           = best;
 
         if (best->next)
             best->next->prev = split;
@@ -67,8 +71,10 @@ void* best_fit_malloc(size_t size)
         best->size = total;
     }
 
-    best->in_use = 1;
+    best->in_use         = 1;
+    best->requested_size = size;    /* STEP 2 */
     ERRNO = NO_ERROR;
+
     return (char*)best + sizeof(metadata_t);
 }
 
@@ -83,7 +89,8 @@ void best_fit_free(void* ptr)
     metadata_t* block =
         (metadata_t*)((char*)ptr - sizeof(metadata_t));
 
-    block->in_use = 0;
+    block->in_use         = 0;
+    block->requested_size = 0;    /* STEP 2 */
 
     /* merge with next */
     if (block->next && !block->next->in_use)

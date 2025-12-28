@@ -2,13 +2,16 @@
 #include "my_malloc.h"
 #include "../stats/stats.h"
 #include "first_fit.h"
-#include <stdlib.h>
 #include "allocator_internal.h"
+#include <stdlib.h>
+
 enum my_malloc_err ERRNO = NO_ERROR;
 
 /* allocator strategy */
 static alloc_strategy_t current_strategy = ALLOC_FIRST_FIT;
 static int allocator_initialized = 0;
+
+/* GLOBAL HEAP OWNERSHIP */
 void   *heap = NULL;
 size_t  heap_size = 0;
 
@@ -24,7 +27,7 @@ void set_allocator_strategy(alloc_strategy_t strategy)
 int allocator_init(size_t size)
 {
     if (allocator_initialized)
-        return 1;   /* already initialized */
+        return 1;
 
     if (size == 0)
         return 0;
@@ -35,7 +38,8 @@ int allocator_init(size_t size)
 
     heap_size = size;
 
-    /* initialize ONLY first-fit for now */
+    /* allocator creates heap
+       allocation strategies manage blocks */
     first_fit_init(heap, size);
 
     allocator_initialized = 1;
@@ -58,7 +62,6 @@ void* my_malloc(size_t size)
             result = first_fit_malloc(size);
             break;
 
-        /* best / worst later */
         default:
             result = NULL;
             break;
@@ -82,6 +85,7 @@ void my_free(void* ptr)
         case ALLOC_FIRST_FIT:
             first_fit_free(ptr);
             break;
+
         default:
             break;
     }
