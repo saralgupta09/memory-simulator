@@ -1,21 +1,18 @@
 CC = gcc
-CFLAGS = -Wall -g
 
-SRC = main.c \
-      allocator/allocator.c \
-      allocator/first_fit.c \
-      allocator/best_fit.c \
-      allocator/worst_fit.c \
-      allocator/my_sbrk.c \
-      observability/memory_dump.c \
-      stats/stats.c
+CFLAGS = -Wall -g -DENABLE_CACHE
 
+SRC = \
+main.c \
+simulator/cli.c \
+allocator/allocator.c \
+allocator/first_fit.c \
+allocator/best_fit.c \
+allocator/worst_fit.c \
+allocator/my_sbrk.c \
+observability/memory_dump.c \
+stats/stats.c \
+cache/cache.c
 
-
-OUT = memsim.exe
-
-all:
-	$(CC) $(CFLAGS) $(SRC) -o $(OUT)
-
-clean:
-	del $(OUT)
+memsim.exe:
+	$(CC) $(CFLAGS) $(SRC) -o memsim.exe

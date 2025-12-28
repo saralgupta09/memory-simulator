@@ -1,45 +1,42 @@
 #include "best_fit.h"
 #include "my_malloc.h"
+#include "allocator_internal.h"
 #include <stdint.h>
 
-#define SBRK_SIZE 2048
 #define MIN_BLOCK_SIZE (sizeof(metadata_t) + 8)
 
-/* Initialize heap once */
-static void init_heap_if_needed(void)
+/* head of best-fit list */
+static metadata_t* bf_head = NULL;
+
+/* ============================
+   INIT (called by allocator_init)
+   ============================ */
+void best_fit_init(void* heap_start, size_t heap_size)
 {
-    if (heap)
-        return;
+    bf_head = (metadata_t*)heap_start;
 
-    heap = my_sbrk(SBRK_SIZE);
-    if (!heap)
-        return;
-
-    /* set global heap size ONCE */
-    heap_size = SBRK_SIZE;
-
-    metadata_t* block = (metadata_t*)heap;
-    block->size = SBRK_SIZE;
-    block->in_use = 0;
-    block->next = NULL;
-    block->prev = NULL;
+    bf_head->size   = heap_size;
+    bf_head->in_use = 0;
+    bf_head->next   = NULL;
+    bf_head->prev   = NULL;
 }
 
-/* BEST FIT malloc */
+/* ============================
+   BEST FIT malloc
+   ============================ */
 void* best_fit_malloc(size_t size)
 {
-    init_heap_if_needed();
-    if (!heap)
+    if (!bf_head || size == 0)
         return NULL;
 
-    size_t total_size = sizeof(metadata_t) + size;
+    size_t total = sizeof(metadata_t) + size;
 
-    metadata_t* curr = (metadata_t*)heap;
+    metadata_t* curr = bf_head;
     metadata_t* best = NULL;
 
     while (curr)
     {
-        if (!curr->in_use && curr->size >= total_size)
+        if (!curr->in_use && curr->size >= total)
         {
             if (!best || curr->size < best->size)
                 best = curr;
@@ -48,31 +45,36 @@ void* best_fit_malloc(size_t size)
     }
 
     if (!best)
-        return NULL;
-
-    /* Split if possible */
-    if (best->size >= total_size + MIN_BLOCK_SIZE)
     {
-        metadata_t* new_block =
-            (metadata_t*)((char*)best + total_size);
+        ERRNO = OUT_OF_MEMORY;
+        return NULL;
+    }
 
-        new_block->size = best->size - total_size;
-        new_block->in_use = 0;
-        new_block->next = best->next;
-        new_block->prev = best;
+    if (best->size >= total + MIN_BLOCK_SIZE)
+    {
+        metadata_t* split =
+            (metadata_t*)((char*)best + total);
+
+        split->size   = best->size - total;
+        split->in_use = 0;
+        split->next   = best->next;
+        split->prev   = best;
 
         if (best->next)
-            best->next->prev = new_block;
+            best->next->prev = split;
 
-        best->next = new_block;
-        best->size = total_size;
+        best->next = split;
+        best->size = total;
     }
 
     best->in_use = 1;
+    ERRNO = NO_ERROR;
     return (char*)best + sizeof(metadata_t);
 }
 
-/* BEST FIT free */
+/* ============================
+   BEST FIT free
+   ============================ */
 void best_fit_free(void* ptr)
 {
     if (!ptr)
@@ -83,25 +85,25 @@ void best_fit_free(void* ptr)
 
     block->in_use = 0;
 
-    /* Coalesce with next */
+    /* merge with next */
     if (block->next && !block->next->in_use)
     {
-        metadata_t* next = block->next;
-        block->size += next->size;
-        block->next = next->next;
-
-        if (next->next)
-            next->next->prev = block;
+        metadata_t* n = block->next;
+        block->size += n->size;
+        block->next = n->next;
+        if (n->next)
+            n->next->prev = block;
     }
 
-    /* Coalesce with prev */
+    /* merge with prev */
     if (block->prev && !block->prev->in_use)
     {
-        metadata_t* prev = block->prev;
-        prev->size += block->size;
-        prev->next = block->next;
-
+        metadata_t* p = block->prev;
+        p->size += block->size;
+        p->next = block->next;
         if (block->next)
-            block->next->prev = prev;
+            block->next->prev = p;
     }
+
+    ERRNO = NO_ERROR;
 }

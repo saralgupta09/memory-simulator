@@ -2,21 +2,50 @@
 #include "my_malloc.h"
 #include "../stats/stats.h"
 #include "first_fit.h"
-#include "best_fit.h"
-#include "worst_fit.h"
+#include <stdlib.h>
+#include "allocator_internal.h"
+enum my_malloc_err ERRNO = NO_ERROR;
 
-enum my_malloc_err ERRNO = NO_ERROR; 
-/* buddy allocator later */
-
+/* allocator strategy */
 static alloc_strategy_t current_strategy = ALLOC_FIRST_FIT;
+static int allocator_initialized = 0;
+void   *heap = NULL;
+size_t  heap_size = 0;
 
-/* Called once or anytime */
+/* ============================
+   PUBLIC API
+   ============================ */
+
 void set_allocator_strategy(alloc_strategy_t strategy)
 {
     current_strategy = strategy;
 }
 
-/* Override my_malloc */
+int allocator_init(size_t size)
+{
+    if (allocator_initialized)
+        return 1;   /* already initialized */
+
+    if (size == 0)
+        return 0;
+
+    heap = my_sbrk(size);
+    if (!heap)
+        return 0;
+
+    heap_size = size;
+
+    /* initialize ONLY first-fit for now */
+    first_fit_init(heap, size);
+
+    allocator_initialized = 1;
+    return 1;
+}
+
+/* ============================
+   malloc / free
+   ============================ */
+
 void* my_malloc(size_t size)
 {
     total_alloc_requests++;
@@ -29,16 +58,9 @@ void* my_malloc(size_t size)
             result = first_fit_malloc(size);
             break;
 
-        case ALLOC_BEST_FIT:
-            result = best_fit_malloc(size);
-            break;
-
-        case ALLOC_WORST_FIT:
-            result = worst_fit_malloc(size);
-            break;
-
-        case ALLOC_BUDDY:
-            result = NULL; /* later */
+        /* best / worst later */
+        default:
+            result = NULL;
             break;
     }
 
@@ -50,9 +72,6 @@ void* my_malloc(size_t size)
     return result;
 }
 
-
-
-/* Override my_free */
 void my_free(void* ptr)
 {
     if (!ptr)
@@ -63,20 +82,11 @@ void my_free(void* ptr)
         case ALLOC_FIRST_FIT:
             first_fit_free(ptr);
             break;
-
-        case ALLOC_BEST_FIT:
-            best_fit_free(ptr);
-            break;
-
-        case ALLOC_WORST_FIT:
-            worst_fit_free(ptr);
-            break;
-
-        case ALLOC_BUDDY:
-            /* later */
+        default:
             break;
     }
 }
+
 void* my_calloc(size_t num, size_t size)
 {
     size_t total = num * size;

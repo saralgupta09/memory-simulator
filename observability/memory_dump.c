@@ -1,25 +1,40 @@
 #include <stdio.h>
 #include <stdint.h>
-
-#include "../allocator/my_malloc.h"
+#include "../allocator/allocator_internal.h"
 #include "memory_dump.h"
+#include "../allocator/allocator.h"
+#include "../allocator/my_malloc.h"
 
-/* cache integration */
-#include "../cache/cache.h"
 
-/* use the global cache levels */
-extern CacheLevel L1;
-extern CacheLevel L2;
-extern CacheLevel L3;
 
-/*
- * Dump the current memory layout by walking the heap linearly.
- * We start from the beginning of the heap and move forward
- * using the size stored in each block's metadata.
- */
+/* ============================
+   OPTIONAL CACHE SUPPORT
+   ============================ */
+#ifdef ENABLE_CACHE
+// Include the header so we know what CacheLevel is
+#include "../cache/cache.h" 
+
+extern CacheLevel L1, L2, L3;
+
+static inline void maybe_cache_access(uint64_t addr)
+{
+    // FIX: Check 'sets', not 'lines'.
+    // If 'sets' is NULL, the cache isn't initialized, so we skip.
+    if (!L1.sets || !L2.sets || !L3.sets) 
+        return;
+
+    cache_hierarchy_access(&L1, &L2, &L3, addr);
+}
+#else
+static inline void maybe_cache_access(uint64_t addr)
+{
+    (void)addr;
+}
+#endif
+
 void dump_memory(void)
 {
-    if (heap == NULL)
+    if (!heap || heap_size == 0)
     {
         printf("Heap not initialized.\n");
         return;
@@ -27,65 +42,106 @@ void dump_memory(void)
 
     printf("\n========== MEMORY DUMP ==========\n");
 
-    char *current = (char *)heap;
-
-    /*
-     * The heap grows in chunks of 2048 bytes (SBRK_SIZE).
-     * For now, we assume a single chunk.
-     */
-    char *heap_end = current + 2048;
-
-    /* ---- statistics ---- */
-    size_t total_used = 0;
-    size_t total_free = 0;
-    int used_blocks = 0;
-    int free_blocks = 0;
+    char *current  = (char *)heap;
+    char *heap_end = current + heap_size;
 
     while (current < heap_end)
     {
-        /* reading block metadata = memory access */
         metadata_t *block = (metadata_t *)current;
 
-        /* simulate cache access to this block header */
-        cache_hierarchy_access(&L1, &L2, &L3, (uint64_t)current);
+        if (block->size == 0)
+        {
+            printf("CORRUPTED BLOCK (size=0)\n");
+            break;
+        }
+
+        maybe_cache_access((uint64_t)current);
 
         uintptr_t start = (uintptr_t)current;
         uintptr_t end   = start + block->size - 1;
 
-        if (block->in_use)
-        {
-            printf("[0x%08lx - 0x%08lx] USED (%zu bytes)\n",
-                   (unsigned long)start,
-                   (unsigned long)end,
-                   (size_t)block->size);
+        // FIX: Cast block->size to (size_t) to silence the %zu warning
+        printf(
+            "[0x%08lx - 0x%08lx] %s (%zu bytes)\n",
+            (unsigned long)start,
+            (unsigned long)end,
+            block->in_use ? "USED" : "FREE",
+            (size_t)block->size
+        );
 
-            total_used += block->size;
-            used_blocks++;
-        }
-        else
-        {
-            printf("[0x%08lx - 0x%08lx] FREE (%zu bytes)\n",
-                   (unsigned long)start,
-                   (unsigned long)end,
-                   (size_t)block->size);
-
-            total_free += block->size;
-            free_blocks++;
-        }
-
-        /* Move to the next block */
         current += block->size;
     }
-
-    printf("=================================\n");
-
-    /* ---- summary ---- */
-    printf("\n----------- SUMMARY -----------\n");
-    printf("Total heap size : %zu bytes\n", total_used + total_free);
-    printf("Used memory     : %zu bytes\n", total_used);
-    printf("Free memory     : %zu bytes\n", total_free);
-    printf("Used blocks     : %d\n", used_blocks);
-    printf("Free blocks     : %d\n", free_blocks);
-    printf("--------------------------------\n\n");
 }
-    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// /* ============================
+//    OPTIONAL CACHE SUPPORT
+//    ============================ */
+// #ifdef ENABLE_CACHE
+// #include "../cache/cache.h"
+// extern CacheLevel L1, L2, L3;
+
+// static inline void maybe_cache_access(uint64_t addr)
+// {
+//     if (!L1.lines || !L2.lines || !L3.lines)
+//         return;
+
+//     cache_hierarchy_access(&L1, &L2, &L3, addr);
+// }
+// #endif
+
+// void dump_memory(void)
+// {
+//     if (!heap || heap_size == 0)
+//     {
+//         printf("Heap not initialized.\n");
+//         return;
+//     }
+
+//     printf("\n========== MEMORY DUMP ==========\n");
+
+//     char *current  = (char *)heap;
+//     char *heap_end = current + heap_size;
+
+//     while (current < heap_end)
+//     {
+//         metadata_t *block = (metadata_t *)current;
+
+//         if (block->size == 0)
+//         {
+//             printf("CORRUPTED BLOCK (size=0)\n");
+//             break;
+//         }
+
+//         maybe_cache_access((uint64_t)current);
+
+//         uintptr_t start = (uintptr_t)current;
+//         uintptr_t end   = start + block->size - 1;
+
+//         printf(
+//             "[0x%08lx - 0x%08lx] %s (%zu bytes)\n",
+//             (unsigned long)start,
+//             (unsigned long)end,
+//             block->in_use ? "USED" : "FREE",
+//             block->size
+//         );
+
+//         current += block->size;
+//     }
+// }

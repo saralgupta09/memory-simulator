@@ -1,10 +1,12 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <stddef.h>
+#include "allocator_internal.h"
+#include "allocator.h"
 
 /* ===== GLOBAL HEAP STATE (declared, NOT defined) ===== */
-extern void*  heap;
-extern size_t heap_size;
+// void* heap = NULL;
+// size_t heap_size = 0;
 
 #define HEAP_SIZE 0x2000   /* 8192 bytes total heap */
 

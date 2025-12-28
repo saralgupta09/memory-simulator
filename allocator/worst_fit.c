@@ -1,45 +1,42 @@
 #include "worst_fit.h"
 #include "my_malloc.h"
+#include "allocator_internal.h"
 #include <stdint.h>
 
-#define SBRK_SIZE 2048
 #define MIN_BLOCK_SIZE (sizeof(metadata_t) + 8)
 
-/* Initialize heap once */
-static void init_heap_if_needed(void)
+/* head of worst-fit list */
+static metadata_t* wf_head = NULL;
+
+/* ============================
+   INIT (called by allocator_init)
+   ============================ */
+void worst_fit_init(void* heap_start, size_t heap_size)
 {
-    if (heap)
-        return;
+    wf_head = (metadata_t*)heap_start;
 
-    heap = my_sbrk(SBRK_SIZE);
-    if (!heap)
-        return;
-
-    /* set global heap size ONCE */
-    heap_size = SBRK_SIZE;
-
-    metadata_t* block = (metadata_t*)heap;
-    block->size = SBRK_SIZE;
-    block->in_use = 0;
-    block->next = NULL;
-    block->prev = NULL;
+    wf_head->size   = heap_size;
+    wf_head->in_use = 0;
+    wf_head->next   = NULL;
+    wf_head->prev   = NULL;
 }
 
-/* WORST FIT malloc */
+/* ============================
+   WORST FIT malloc
+   ============================ */
 void* worst_fit_malloc(size_t size)
 {
-    init_heap_if_needed();
-    if (!heap)
+    if (!wf_head || size == 0)
         return NULL;
 
-    size_t total_size = sizeof(metadata_t) + size;
+    size_t total = sizeof(metadata_t) + size;
 
-    metadata_t* curr = (metadata_t*)heap;
+    metadata_t* curr = wf_head;
     metadata_t* worst = NULL;
 
     while (curr)
     {
-        if (!curr->in_use && curr->size >= total_size)
+        if (!curr->in_use && curr->size >= total)
         {
             if (!worst || curr->size > worst->size)
                 worst = curr;
@@ -48,31 +45,36 @@ void* worst_fit_malloc(size_t size)
     }
 
     if (!worst)
-        return NULL;
-
-    /* Split if possible */
-    if (worst->size >= total_size + MIN_BLOCK_SIZE)
     {
-        metadata_t* new_block =
-            (metadata_t*)((char*)worst + total_size);
+        ERRNO = OUT_OF_MEMORY;
+        return NULL;
+    }
 
-        new_block->size = worst->size - total_size;
-        new_block->in_use = 0;
-        new_block->next = worst->next;
-        new_block->prev = worst;
+    if (worst->size >= total + MIN_BLOCK_SIZE)
+    {
+        metadata_t* split =
+            (metadata_t*)((char*)worst + total);
+
+        split->size   = worst->size - total;
+        split->in_use = 0;
+        split->next   = worst->next;
+        split->prev   = worst;
 
         if (worst->next)
-            worst->next->prev = new_block;
+            worst->next->prev = split;
 
-        worst->next = new_block;
-        worst->size = total_size;
+        worst->next = split;
+        worst->size = total;
     }
 
     worst->in_use = 1;
+    ERRNO = NO_ERROR;
     return (char*)worst + sizeof(metadata_t);
 }
 
-/* WORST FIT free */
+/* ============================
+   WORST FIT free
+   ============================ */
 void worst_fit_free(void* ptr)
 {
     if (!ptr)
@@ -83,25 +85,25 @@ void worst_fit_free(void* ptr)
 
     block->in_use = 0;
 
-    /* Coalesce with next */
+    /* merge with next */
     if (block->next && !block->next->in_use)
     {
-        metadata_t* next = block->next;
-        block->size += next->size;
-        block->next = next->next;
-
-        if (next->next)
-            next->next->prev = block;
+        metadata_t* n = block->next;
+        block->size += n->size;
+        block->next = n->next;
+        if (n->next)
+            n->next->prev = block;
     }
 
-    /* Coalesce with prev */
+    /* merge with prev */
     if (block->prev && !block->prev->in_use)
     {
-        metadata_t* prev = block->prev;
-        prev->size += block->size;
-        prev->next = block->next;
-
+        metadata_t* p = block->prev;
+        p->size += block->size;
+        p->next = block->next;
         if (block->next)
-            block->next->prev = prev;
+            block->next->prev = p;
     }
+
+    ERRNO = NO_ERROR;
 }

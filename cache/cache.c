@@ -151,9 +151,9 @@ void cache_print_stats(const char *name, CacheLevel *cache) {
     uint64_t t = h + m;
 
     printf("=== %s Cache Statistics ===\n", name);
-    printf("Hits        : %lu\n", h);
-    printf("Misses      : %lu\n", m);
-    printf("Total Access: %lu\n", t);
+    printf("Hits        : %lu\n", (long unsigned int)h);
+    printf("Misses      : %lu\n", (long unsigned int)m);
+    printf("Total Access: %lu\n", (long unsigned int)t);
     printf("Hit Ratio   : %.4f\n\n", t ? (double)h / t : 0.0);
 }
 
