@@ -1,6 +1,6 @@
 #include "first_fit.h"
 #include "my_malloc.h"
-#include "allocator_internal.h"   // metadata_t, ERRNO, OUT_OF_MEMORY
+#include "allocator_internal.h"
 #include <stdint.h>
 
 #define MIN_BLOCK_SIZE (sizeof(metadata_t) + 8)
@@ -15,10 +15,11 @@ void first_fit_init(void* heap_start, size_t heap_size)
 {
     ff_head = (metadata_t*)heap_start;
 
-    ff_head->size   = heap_size;
-    ff_head->in_use = 0;
-    ff_head->next   = NULL;
-    ff_head->prev   = NULL;
+    ff_head->size            = heap_size;
+    ff_head->requested_size  = 0;        // IMPORTANT
+    ff_head->in_use          = 0;
+    ff_head->next            = NULL;
+    ff_head->prev            = NULL;
 }
 
 /* ============================
@@ -42,10 +43,11 @@ void* first_fit_malloc(size_t size)
                 metadata_t* split =
                     (metadata_t*)((char*)curr + total);
 
-                split->size   = curr->size - total;
-                split->in_use = 0;
-                split->next   = curr->next;
-                split->prev   = curr;
+                split->size           = curr->size - total;
+                split->requested_size = 0;   // IMPORTANT
+                split->in_use         = 0;
+                split->next           = curr->next;
+                split->prev           = curr;
 
                 if (curr->next)
                     curr->next->prev = split;
@@ -54,7 +56,8 @@ void* first_fit_malloc(size_t size)
                 curr->size = total;
             }
 
-            curr->in_use = 1;
+            curr->in_use         = 1;
+            curr->requested_size = size;    // IMPORTANT
             ERRNO = NO_ERROR;
             return (char*)curr + sizeof(metadata_t);
         }
@@ -78,6 +81,7 @@ void first_fit_free(void* ptr)
         (metadata_t*)((char*)ptr - sizeof(metadata_t));
 
     block->in_use = 0;
+    block->requested_size = 0;   // IMPORTANT
 
     /* merge with next */
     if (block->next && !block->next->in_use)

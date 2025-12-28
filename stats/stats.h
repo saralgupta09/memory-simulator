@@ -21,10 +21,13 @@ extern size_t failed_allocs;
    ========================= */
 
 typedef struct {
-    size_t total_used;          /* total bytes used (including metadata) */
-    size_t total_free;          /* total free bytes */
-    size_t internal_frag;       /* wasted bytes inside allocated blocks */
-    size_t largest_free_block;  /* largest free block size */
+    size_t total_used;              // total allocated bytes (incl metadata)
+    size_t total_free;              // total free bytes
+    size_t internal_frag;           // payload slack only
+    size_t largest_free_block;
+
+    size_t allocator_overhead;      // NEW: metadata overhead
+    size_t allocated_blocks;        // NEW: count of used blocks
 } frag_stats_t;
 
 /* collect fragmentation info by walking heap */

@@ -196,6 +196,13 @@ void cli_run(void)
             stats_print();
         }
 
+        /* ---- fragmentation stats ---- */
+        else if (strcmp(cmd, "frag") == 0) {
+            frag_stats_t fs;
+            frag_stats_collect(&fs);
+            frag_stats_print(&fs);
+        }
+
         /* ---- exit ---- */
         else if (strcmp(cmd, "exit") == 0) {
             break;

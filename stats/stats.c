@@ -12,13 +12,14 @@ size_t successful_allocs    = 0;
 size_t failed_allocs        = 0;
 
 /* =========================
-   Existing collected stats
+   Collected stats
    ========================= */
 static size_t used_memory = 0;
 static size_t free_memory = 0;
 static size_t used_blocks = 0;
 static size_t free_blocks = 0;
 static size_t largest_free_block = 0;
+static size_t internal_fragmentation = 0;
 
 /* =========================
    Reset stats
@@ -34,10 +35,11 @@ void stats_reset(void)
     used_blocks = 0;
     free_blocks = 0;
     largest_free_block = 0;
+    internal_fragmentation = 0;
 }
 
 /* =========================
-   Walk heap and collect base stats
+   Walk heap and collect stats
    ========================= */
 void stats_collect(void)
 {
@@ -46,6 +48,7 @@ void stats_collect(void)
     used_blocks = 0;
     free_blocks = 0;
     largest_free_block = 0;
+    internal_fragmentation = 0;
 
     if (!heap || heap_size == 0)
         return;
@@ -58,12 +61,20 @@ void stats_collect(void)
         metadata_t* block = (metadata_t*)curr;
 
         if (block->size == 0)
-            break;  /* safety */
+            break;
 
         if (block->in_use)
         {
+            size_t payload_size = block->size - sizeof(metadata_t);
+
             used_blocks++;
             used_memory += block->size;
+
+            if (payload_size > block->requested_size)
+            {
+                internal_fragmentation +=
+                    payload_size - block->requested_size;
+            }
         }
         else
         {
@@ -94,7 +105,8 @@ void stats_print(void)
         external_frag = 1.0 - ((double)largest_free_block / free_memory);
 
     if (total_alloc_requests > 0)
-        success_rate = ((double)successful_allocs / total_alloc_requests) * 100.0;
+        success_rate =
+            ((double)successful_allocs / total_alloc_requests) * 100.0;
 
     printf("\n---------- SUMMARY ----------\n");
     printf("Total heap size        : %zu bytes\n", heap_size);
@@ -102,6 +114,7 @@ void stats_print(void)
     printf("Free memory            : %zu bytes\n", free_memory);
     printf("Used blocks            : %zu\n", used_blocks);
     printf("Free blocks            : %zu\n", free_blocks);
+    printf("Internal fragmentation : %zu bytes\n", internal_fragmentation);
     printf("Memory utilization     : %.2f%%\n", utilization * 100.0);
     printf("External fragmentation : %.3f\n", external_frag);
     printf("Allocation requests    : %zu\n", total_alloc_requests);
@@ -112,7 +125,7 @@ void stats_print(void)
 }
 
 /* =========================
-   Fragmentation stats (STEP 3)
+   Fragmentation stats (detailed)
    ========================= */
 void frag_stats_collect(frag_stats_t *fs)
 {
@@ -120,6 +133,8 @@ void frag_stats_collect(frag_stats_t *fs)
     fs->total_free = 0;
     fs->internal_frag = 0;
     fs->largest_free_block = 0;
+    fs->allocator_overhead = 0;    
+    fs->allocated_blocks   = 0; 
 
     if (!heap || heap_size == 0)
         return;
@@ -137,11 +152,14 @@ void frag_stats_collect(frag_stats_t *fs)
         if (block->in_use)
         {
             size_t payload_size = block->size - sizeof(metadata_t);
+
             fs->total_used += block->size;
+            fs->allocated_blocks++;                     
+            fs->allocator_overhead += sizeof(metadata_t); 
 
             if (payload_size > block->requested_size)
                 fs->internal_frag +=
-                    (payload_size - block->requested_size);
+                    payload_size - block->requested_size;
         }
         else
         {
@@ -169,8 +187,10 @@ void frag_stats_print(const frag_stats_t *fs)
     printf("\n------ FRAGMENTATION STATS ------\n");
     printf("Total used memory      : %zu bytes\n", fs->total_used);
     printf("Total free memory      : %zu bytes\n", fs->total_free);
+    printf("Allocated blocks       : %zu\n", fs->allocated_blocks);
     printf("Internal fragmentation : %zu bytes\n", fs->internal_frag);
     printf("Largest free block     : %zu bytes\n", fs->largest_free_block);
     printf("External fragmentation : %.3f\n", external_frag);
+    printf("Allocator overhead     : %zu bytes\n", fs->allocator_overhead);
     printf("---------------------------------\n");
 }

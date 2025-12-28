@@ -71,7 +71,7 @@ void* worst_fit_malloc(size_t size)
     }
 
     worst->in_use         = 1;
-    worst->requested_size = size;   /* STEP 2 */
+    worst->requested_size = size;
     ERRNO = NO_ERROR;
 
     return (char*)worst + sizeof(metadata_t);
@@ -89,7 +89,7 @@ void worst_fit_free(void* ptr)
         (metadata_t*)((char*)ptr - sizeof(metadata_t));
 
     block->in_use         = 0;
-    block->requested_size = 0;   /* STEP 2 */
+    block->requested_size = 0;
 
     /* merge with next */
     if (block->next && !block->next->in_use)
