@@ -9,6 +9,7 @@ allocator/allocator.c \
 allocator/first_fit.c \
 allocator/best_fit.c \
 allocator/worst_fit.c \
+allocator/buddy.c \
 allocator/my_sbrk.c \
 observability/memory_dump.c \
 stats/stats.c \

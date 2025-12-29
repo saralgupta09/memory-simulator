@@ -113,7 +113,7 @@ void cli_run(void)
         else if (strcmp(cmd, "strategy") == 0) {
             char *arg = strtok(NULL, " \n");
             if (!arg) {
-                printf("Usage: strategy <first|best|worst>\n");
+                printf("Usage: strategy <first|best|worst|buddy>\n");
                 continue;
             }
 
@@ -128,6 +128,10 @@ void cli_run(void)
             else if (strcmp(arg, "worst") == 0) {
                 set_allocator_strategy(ALLOC_WORST_FIT);
                 printf("Strategy set to WORST FIT\n");
+            }
+            else if (strcmp(arg, "buddy") == 0) {
+                set_allocator_strategy(ALLOC_BUDDY);
+                printf("Strategy set to BUDDY\n");
             }
             else {
                 printf("Unknown strategy\n");

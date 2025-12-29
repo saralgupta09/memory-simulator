@@ -1,17 +1,23 @@
 #include "allocator.h"
 #include "my_malloc.h"
 #include "../stats/stats.h"
+
 #include "first_fit.h"
+#include "buddy.h"
+
 #include "allocator_internal.h"
 #include <stdlib.h>
 
+/* global errno */
 enum my_malloc_err ERRNO = NO_ERROR;
 
 /* allocator strategy */
 static alloc_strategy_t current_strategy = ALLOC_FIRST_FIT;
 static int allocator_initialized = 0;
 
-/* GLOBAL HEAP OWNERSHIP */
+/* ============================
+   GLOBAL HEAP OWNERSHIP
+   ============================ */
 void   *heap = NULL;
 size_t  heap_size = 0;
 
@@ -32,15 +38,16 @@ int allocator_init(size_t size)
     if (size == 0)
         return 0;
 
+    /* ONLY allocator creates heap */
     heap = my_sbrk(size);
     if (!heap)
         return 0;
 
     heap_size = size;
 
-    /* allocator creates heap
-       allocation strategies manage blocks */
+    /* initialize allocation strategies */
     first_fit_init(heap, size);
+    buddy_init(heap, size);
 
     allocator_initialized = 1;
     return 1;
@@ -60,6 +67,10 @@ void* my_malloc(size_t size)
     {
         case ALLOC_FIRST_FIT:
             result = first_fit_malloc(size);
+            break;
+
+        case ALLOC_BUDDY:
+            result = buddy_malloc(size);
             break;
 
         default:
@@ -86,10 +97,18 @@ void my_free(void* ptr)
             first_fit_free(ptr);
             break;
 
+        case ALLOC_BUDDY:
+            buddy_free(ptr);
+            break;
+
         default:
             break;
     }
 }
+
+/* ============================
+   libc helpers
+   ============================ */
 
 void* my_calloc(size_t num, size_t size)
 {

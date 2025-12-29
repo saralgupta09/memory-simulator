@@ -1,268 +1,189 @@
+#include "buddy.h"
+#include "allocator_internal.h"
 #include "my_malloc.h"
 #include <stdint.h>
-#include <stdio.h>
 
-#define SBRK_SIZE 2048
+#define MIN_ORDER 4   /* 2^4 = 16 bytes */
+#define MAX_ORDERS 12 /* supports heap up to 2^12 = 4096 (adjust if needed) */
 
-#ifdef DEBUG
-#define DEBUG_PRINT(x) printf x
-#else
-#define DEBUG_PRINT(x)
-#endif
+/* buddy free lists */
+static metadata_t* freelist[MAX_ORDERS];
+static void* heap_base = NULL;
 
 /* =========================
-   GLOBAL HEAP OWNERSHIP
+   Helpers
    ========================= */
-void* heap = NULL;
-size_t heap_size = 0;
 
-/* Buddy freelist */
-metadata_t* freelist[8];
-
-/* --- helper functions unchanged --- */
-
-int get_index(size_t size)
+static int order_for_size(size_t size)
 {
-    int index = 0;
-    int free_size = 16;
-    while ((int)size > free_size)
+    int order = MIN_ORDER;
+    size_t block = 1UL << order;
+
+    while (block < size)
     {
-        free_size *= 2;
-        index++;
+        order++;
+        block <<= 1;
     }
-    return index;
+    return order;
 }
 
-metadata_t* get_buddy(metadata_t* address)
+static size_t size_for_order(int order)
 {
-    uintptr_t buddy_address =
-        (uintptr_t)address ^ (uintptr_t)address->size;
-
-    metadata_t* buddy = (metadata_t*)buddy_address;
-    if (address->size == buddy->size)
-        return buddy;
-
-    return NULL;
+    return (size_t)1 << order;
 }
 
-void setup_for_removal(metadata_t* one, metadata_t* two)
+static metadata_t* get_buddy(metadata_t* block)
 {
-    if (one->next == two) one->next = two->next;
-    if (one->prev == two) one->prev = two->prev;
-    if (two->next == one) two->next = one->next;
-    if (two->prev == one) two->prev = one->prev;
+    uintptr_t offset =
+        (uintptr_t)((char*)block - (char*)heap_base);
+
+    uintptr_t buddy_offset =
+        offset ^ block->size;
+
+    return (metadata_t*)((char*)heap_base + buddy_offset);
 }
 
-metadata_t* remove_from_freelist(metadata_t* node)
+static void freelist_push(int order, metadata_t* block)
 {
-    metadata_t* next = node->next;
-    metadata_t* prev = node->prev;
+    block->next = freelist[order];
+    block->prev = NULL;
 
-    int index = get_index(node->size);
+    if (freelist[order])
+        freelist[order]->prev = block;
 
-    if (prev && next)
-    {
-        prev->next = next;
-        next->prev = prev;
-    }
-    else if (prev && !next)
-    {
-        prev->next = NULL;
-    }
-    else if (!prev && next)
-    {
-        freelist[index] = next;
-        next->prev = NULL;
-    }
+    freelist[order] = block;
+}
+
+static metadata_t* freelist_pop(int order)
+{
+    metadata_t* block = freelist[order];
+    if (!block) return NULL;
+
+    freelist[order] = block->next;
+    if (freelist[order])
+        freelist[order]->prev = NULL;
+
+    block->next = block->prev = NULL;
+    return block;
+}
+
+static void freelist_remove(int order, metadata_t* block)
+{
+    if (block->prev)
+        block->prev->next = block->next;
     else
-    {
-        freelist[index] = NULL;
-    }
+        freelist[order] = block->next;
 
-    node->next = NULL;
-    node->prev = NULL;
+    if (block->next)
+        block->next->prev = block->prev;
 
-    return node;
+    block->next = block->prev = NULL;
 }
 
-void add_to_freelist(int index, metadata_t* node)
+/* =========================
+   INIT
+   ========================= */
+
+void buddy_init(void* heap_start, size_t heap_size)
 {
-    metadata_t* head = freelist[index];
+    heap_base = heap_start;
 
-    node->prev = NULL;
-    node->next = head;
+    for (int i = 0; i < MAX_ORDERS; i++)
+        freelist[i] = NULL;
 
-    if (head)
-        head->prev = node;
+    int order = order_for_size(heap_size);
 
-    freelist[index] = node;
+    metadata_t* root = (metadata_t*)heap_start;
+    root->size = size_for_order(order);
+    root->requested_size = 0;
+    root->in_use = 0;
+    root->next = root->prev = NULL;
+
+    freelist_push(order, root);
 }
 
-void split_memory(int target_index, int current_index, metadata_t* block)
-{
-    while (current_index > target_index)
-    {
-        remove_from_freelist(block);
-
-        block->size /= 2;
-
-        metadata_t* buddy =
-            (metadata_t*)((char*)block + block->size);
-
-        buddy->size = block->size;
-        buddy->in_use = 0;
-        buddy->next = NULL;
-        buddy->prev = NULL;
-
-        add_to_freelist(current_index - 1, buddy);
-
-        current_index--;
-        add_to_freelist(current_index, block);
-    }
-}
-
-metadata_t* get_first(metadata_t* one, metadata_t* two)
-{
-    return (one > two) ? two : one;
-}
-
-metadata_t* merge_buddies(metadata_t* block, metadata_t* buddy)
-{
-    metadata_t* first = get_first(block, buddy);
-    first->size *= 2;
-    return first;
-}
-
-void* remove_and_return_block(int index)
-{
-    metadata_t* block = remove_from_freelist(freelist[index]);
-    block->in_use = 1;
-    ERRNO = NO_ERROR;
-    return (void*)((char*)block + sizeof(metadata_t));
-}
-
-/* ===============================
-   BUDDY ALLOCATOR PUBLIC API
-   =============================== */
+/* =========================
+   MALLOC
+   ========================= */
 
 void* buddy_malloc(size_t size)
 {
-    size = sizeof(metadata_t) + size;
+    if (size == 0)
+        return NULL;
 
-    if (size > SBRK_SIZE)
+    size_t total = sizeof(metadata_t) + size;
+    int target = order_for_size(total);
+
+    int order = target;
+    while (order < MAX_ORDERS && !freelist[order])
+        order++;
+
+    if (order >= MAX_ORDERS)
     {
-        ERRNO = SINGLE_REQUEST_TOO_LARGE;
+        ERRNO = OUT_OF_MEMORY;
         return NULL;
     }
 
-    if (!heap)
+    metadata_t* block = freelist_pop(order);
+
+    while (order > target)
     {
-        heap = my_sbrk(SBRK_SIZE);
-        if (!heap)
-        {
-            ERRNO = OUT_OF_MEMORY;
-            return NULL;
-        }
+        order--;
 
-        /* SET HEAP SIZE ONCE */
-        heap_size = SBRK_SIZE;
+        size_t half = block->size / 2;
+        metadata_t* buddy =
+            (metadata_t*)((char*)block + half);
 
-        freelist[7] = (metadata_t*)heap;
-        freelist[7]->in_use = 0;
-        freelist[7]->size = SBRK_SIZE;
-        freelist[7]->next = NULL;
-        freelist[7]->prev = NULL;
+        buddy->size = half;
+        buddy->requested_size = 0;
+        buddy->in_use = 0;
+        buddy->next = buddy->prev = NULL;
+
+        block->size = half;
+
+        freelist_push(order, buddy);
     }
 
-    int index = get_index(size);
-
-    if (freelist[index])
-        return remove_and_return_block(index);
-
-    int next_index = index + 1;
-    while (next_index < 8 && !freelist[next_index])
-        next_index++;
-
-    if (next_index < 8)
-    {
-        split_memory(index, next_index, freelist[next_index]);
-        return remove_and_return_block(index);
-    }
-
-    ERRNO = OUT_OF_MEMORY;
-    return NULL;
-}
-
-void* buddy_calloc(size_t num, size_t size)
-{
-    if (num * size > SBRK_SIZE)
-    {
-        ERRNO = SINGLE_REQUEST_TOO_LARGE;
-        return NULL;
-    }
-
-    void* p = buddy_malloc(num * size);
-    if (!p) return NULL;
-
-    for (size_t i = 0;
-         i < (((metadata_t*)p - 1)->size - sizeof(metadata_t));
-         i++)
-    {
-        *((char*)p + i) = 0;
-    }
-
+    block->in_use = 1;
+    block->requested_size = size;
     ERRNO = NO_ERROR;
-    return p;
+
+    return (char*)block + sizeof(metadata_t);
 }
+
+/* =========================
+   FREE
+   ========================= */
 
 void buddy_free(void* ptr)
 {
-    if (!ptr) return;
-
-    metadata_t* block = (metadata_t*)((char*)ptr - sizeof(metadata_t));
-    metadata_t* buddy = get_buddy(block);
-
-    if (!block->in_use)
-    {
-        ERRNO = DOUBLE_FREE_DETECTED;
+    if (!ptr)
         return;
-    }
+
+    metadata_t* block =
+        (metadata_t*)((char*)ptr - sizeof(metadata_t));
 
     block->in_use = 0;
+    block->requested_size = 0;
 
-    if (buddy && !buddy->in_use && buddy->size != SBRK_SIZE)
+    int order = order_for_size(block->size);
+
+    while (order + 1 < MAX_ORDERS)
     {
-        setup_for_removal(block, buddy);
-        remove_from_freelist(buddy);
-        remove_from_freelist(block);
+        metadata_t* buddy = get_buddy(block);
 
-        metadata_t* first = merge_buddies(block, buddy);
-        add_to_freelist(get_index(first->size), first);
+        if (!buddy || buddy->in_use || buddy->size != block->size)
+            break;
 
-        if (get_buddy(first) && first->size != SBRK_SIZE)
-            buddy_free((char*)first + sizeof(metadata_t));
+        freelist_remove(order, buddy);
+
+        if (buddy < block)
+            block = buddy;
+
+        block->size <<= 1;
+        order++;
     }
-    else
-    {
-        add_to_freelist(get_index(block->size), block);
-    }
 
+    freelist_push(order, block);
     ERRNO = NO_ERROR;
-}
-
-void* buddy_memmove(void* dest, const void* src, size_t num_bytes)
-{
-    char* d = (char*)dest;
-    char* s = (char*)src;
-
-    if (d == s) return dest;
-
-    if (d > s)
-        for (int i = num_bytes - 1; i >= 0; i--)
-            d[i] = s[i];
-    else
-        for (size_t i = 0; i < num_bytes; i++)
-            d[i] = s[i];
-
-    return dest;
 }
