@@ -4,6 +4,9 @@
 
 #include "first_fit.h"
 #include "buddy.h"
+#include "best_fit.h"
+#include "worst_fit.h"
+
 
 #include "allocator_internal.h"
 #include <stdlib.h>
@@ -72,7 +75,12 @@ void* my_malloc(size_t size)
         case ALLOC_BUDDY:
             result = buddy_malloc(size);
             break;
-
+        case ALLOC_BEST_FIT:
+            result = best_fit_malloc(size);
+            break;
+        case ALLOC_WORST_FIT:
+            result = worst_fit_malloc(size);
+            break;
         default:
             result = NULL;
             break;
