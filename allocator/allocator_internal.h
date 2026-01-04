@@ -13,8 +13,11 @@ typedef struct metadata {
     struct metadata *prev;
 } metadata_t;
 
-/* global heap */
+/* global heap (raw memory) */
 extern void   *heap;
 extern size_t  heap_size;
+
+/* global heap block list (SINGLE source of truth) */
+extern metadata_t *heap_head;
 
 #endif

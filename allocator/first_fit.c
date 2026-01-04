@@ -5,33 +5,16 @@
 
 #define MIN_BLOCK_SIZE (sizeof(metadata_t) + 8)
 
-/* head of first-fit list */
-static metadata_t* ff_head = NULL;
-
-/* ============================
-   INIT (called by allocator_init)
-   ============================ */
-void first_fit_init(void* heap_start, size_t heap_size)
-{
-    ff_head = (metadata_t*)heap_start;
-
-    ff_head->size            = heap_size;
-    ff_head->requested_size  = 0;        // IMPORTANT
-    ff_head->in_use          = 0;
-    ff_head->next            = NULL;
-    ff_head->prev            = NULL;
-}
-
 /* ============================
    FIRST FIT malloc
    ============================ */
 void* first_fit_malloc(size_t size)
 {
-    if (!ff_head || size == 0)
+    if (!heap_head || size == 0)
         return NULL;
 
     size_t total = sizeof(metadata_t) + size;
-    metadata_t* curr = ff_head;
+    metadata_t* curr = heap_head;
 
     while (curr)
     {
@@ -44,7 +27,7 @@ void* first_fit_malloc(size_t size)
                     (metadata_t*)((char*)curr + total);
 
                 split->size           = curr->size - total;
-                split->requested_size = 0;   // IMPORTANT
+                split->requested_size = 0;
                 split->in_use         = 0;
                 split->next           = curr->next;
                 split->prev           = curr;
@@ -57,8 +40,9 @@ void* first_fit_malloc(size_t size)
             }
 
             curr->in_use         = 1;
-            curr->requested_size = size;    // IMPORTANT
+            curr->requested_size = size;
             ERRNO = NO_ERROR;
+
             return (char*)curr + sizeof(metadata_t);
         }
 
@@ -71,6 +55,7 @@ void* first_fit_malloc(size_t size)
 
 /* ============================
    FIRST FIT free
+   (strategy-independent free)
    ============================ */
 void first_fit_free(void* ptr)
 {
@@ -81,7 +66,7 @@ void first_fit_free(void* ptr)
         (metadata_t*)((char*)ptr - sizeof(metadata_t));
 
     block->in_use = 0;
-    block->requested_size = 0;   // IMPORTANT
+    block->requested_size = 0;
 
     /* merge with next */
     if (block->next && !block->next->in_use)

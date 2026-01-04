@@ -3,10 +3,9 @@
 #include "../stats/stats.h"
 
 #include "first_fit.h"
-#include "buddy.h"
 #include "best_fit.h"
 #include "worst_fit.h"
-
+#include "buddy.h"
 
 #include "allocator_internal.h"
 #include <stdlib.h>
@@ -23,6 +22,9 @@ static int allocator_initialized = 0;
    ============================ */
 void   *heap = NULL;
 size_t  heap_size = 0;
+
+/* SINGLE shared heap block list */
+metadata_t *heap_head = NULL;
 
 /* ============================
    PUBLIC API
@@ -48,9 +50,14 @@ int allocator_init(size_t size)
 
     heap_size = size;
 
-    /* initialize allocation strategies */
-    first_fit_init(heap, size);
-    buddy_init(heap, size);
+    /* initialize SINGLE shared heap list */
+    heap_head = (metadata_t *)heap;
+
+    heap_head->size = size;
+    heap_head->requested_size = 0;
+    heap_head->in_use = 0;
+    heap_head->next = NULL;
+    heap_head->prev = NULL;
 
     allocator_initialized = 1;
     return 1;
@@ -72,15 +79,18 @@ void* my_malloc(size_t size)
             result = first_fit_malloc(size);
             break;
 
-        case ALLOC_BUDDY:
-            result = buddy_malloc(size);
-            break;
         case ALLOC_BEST_FIT:
             result = best_fit_malloc(size);
             break;
+
         case ALLOC_WORST_FIT:
             result = worst_fit_malloc(size);
             break;
+
+        case ALLOC_BUDDY:
+            result = buddy_malloc(size);
+            break;
+
         default:
             result = NULL;
             break;
@@ -99,9 +109,14 @@ void my_free(void* ptr)
     if (!ptr)
         return;
 
+    /* free logic is strategy-independent now,
+       but we keep switch to avoid breaking buddy */
     switch (current_strategy)
     {
         case ALLOC_FIRST_FIT:
+        case ALLOC_BEST_FIT:
+        case ALLOC_WORST_FIT:
+            /* all list-based allocators free the same way */
             first_fit_free(ptr);
             break;
 
