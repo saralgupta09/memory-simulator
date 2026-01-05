@@ -19,13 +19,17 @@ CacheLevel L3;
 Global cache levels
 (visible to other files)
 ========================= */
-
-int main(int argc, char **argv)
-{
-    #ifdef ENABLE_CACHE
         // cache_init(&L1,  128, 64, 1);   // L1: 32KB, 64B block, 4-way
         // cache_init(&L2, 1024, 64, 2);   // L2: 256KB, 8-way
         // cache_init(&L3,  8192, 64, 4); // L3: 1MB, 16-way
+
+int main(int argc, char **argv)
+{
+
+
+    
+    #ifdef ENABLE_CACHE
+
         cache_init(&L1, 1024, 64, 4);   // 16 lines, 4-way
         cache_init(&L2, 2048, 64, 4);   // 32 lines, 4-way
         cache_init(&L3, 4096, 64, 8);   // 64 lines, 8-way

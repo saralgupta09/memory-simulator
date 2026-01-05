@@ -23,7 +23,7 @@ static int allocator_initialized = 0;
 void   *heap = NULL;
 size_t  heap_size = 0;
 
-/* SINGLE shared heap block list */
+/* SINGLE shared heap block list (for list-based allocators) */
 metadata_t *heap_head = NULL;
 
 /* ============================
@@ -50,14 +50,17 @@ int allocator_init(size_t size)
 
     heap_size = size;
 
-    /* initialize SINGLE shared heap list */
+    /* ---------- LIST-BASED ALLOCATORS INIT ---------- */
     heap_head = (metadata_t *)heap;
-
     heap_head->size = size;
     heap_head->requested_size = 0;
     heap_head->in_use = 0;
     heap_head->next = NULL;
     heap_head->prev = NULL;
+
+    /* ---------- BUDDY ALLOCATOR INIT (FIX) ---------- */
+    /* Buddy maintains its OWN internal structure */
+    buddy_init(heap, size);
 
     allocator_initialized = 1;
     return 1;
@@ -109,14 +112,12 @@ void my_free(void* ptr)
     if (!ptr)
         return;
 
-    /* free logic is strategy-independent now,
-       but we keep switch to avoid breaking buddy */
     switch (current_strategy)
     {
         case ALLOC_FIRST_FIT:
         case ALLOC_BEST_FIT:
         case ALLOC_WORST_FIT:
-            /* all list-based allocators free the same way */
+            /* list-based allocators share free logic */
             first_fit_free(ptr);
             break;
 

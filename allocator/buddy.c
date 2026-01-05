@@ -4,11 +4,12 @@
 #include <stdint.h>
 
 #define MIN_ORDER 4   /* 2^4 = 16 bytes */
-#define MAX_ORDERS 12 /* supports heap up to 2^12 = 4096 (adjust if needed) */
+#define MAX_ORDERS 12 /* supports blocks up to 2^11 = 2048 bytes */
 
 /* buddy free lists */
 static metadata_t* freelist[MAX_ORDERS];
 static void* heap_base = NULL;
+static size_t heap_limit = 0;
 
 /* =========================
    Helpers
@@ -19,7 +20,7 @@ static int order_for_size(size_t size)
     int order = MIN_ORDER;
     size_t block = 1UL << order;
 
-    while (block < size)
+    while (block < size && order + 1 < MAX_ORDERS)
     {
         order++;
         block <<= 1;
@@ -30,6 +31,12 @@ static int order_for_size(size_t size)
 static size_t size_for_order(int order)
 {
     return (size_t)1 << order;
+}
+
+static int is_within_heap(void* ptr)
+{
+    return (ptr >= heap_base) &&
+           (ptr < (void*)((char*)heap_base + heap_limit));
 }
 
 static metadata_t* get_buddy(metadata_t* block)
@@ -87,14 +94,17 @@ static void freelist_remove(int order, metadata_t* block)
 void buddy_init(void* heap_start, size_t heap_size)
 {
     heap_base = heap_start;
+    heap_limit = heap_size;
 
     for (int i = 0; i < MAX_ORDERS; i++)
         freelist[i] = NULL;
 
+    /* round DOWN heap size to supported power of two */
     int order = order_for_size(heap_size);
+    size_t usable_size = size_for_order(order);
 
     metadata_t* root = (metadata_t*)heap_start;
-    root->size = size_for_order(order);
+    root->size = usable_size;
     root->requested_size = 0;
     root->in_use = 0;
     root->next = root->prev = NULL;
@@ -172,7 +182,10 @@ void buddy_free(void* ptr)
     {
         metadata_t* buddy = get_buddy(block);
 
-        if (!buddy || buddy->in_use || buddy->size != block->size)
+        if (!is_within_heap(buddy))
+            break;
+
+        if (buddy->in_use || buddy->size != block->size)
             break;
 
         freelist_remove(order, buddy);
