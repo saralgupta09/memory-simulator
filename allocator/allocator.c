@@ -10,15 +10,13 @@
 #include "allocator_internal.h"
 #include <stdlib.h>
 
-/* global errno */
 enum my_malloc_err ERRNO = NO_ERROR;
 
-/* allocator strategy */
 static alloc_strategy_t current_strategy = ALLOC_FIRST_FIT;
 static int allocator_initialized = 0;
 
 /* ============================
-   GLOBAL HEAP OWNERSHIP
+   GLOBAL HEAP 
    ============================ */
 void   *heap = NULL;
 size_t  heap_size = 0;
@@ -26,9 +24,6 @@ size_t  heap_size = 0;
 /* SINGLE shared heap block list (for list-based allocators) */
 metadata_t *heap_head = NULL;
 
-/* ============================
-   PUBLIC API
-   ============================ */
 
 void set_allocator_strategy(alloc_strategy_t strategy)
 {
@@ -66,9 +61,6 @@ int allocator_init(size_t size)
     return 1;
 }
 
-/* ============================
-   malloc / free
-   ============================ */
 
 void* my_malloc(size_t size)
 {
@@ -117,7 +109,6 @@ void my_free(void* ptr)
         case ALLOC_FIRST_FIT:
         case ALLOC_BEST_FIT:
         case ALLOC_WORST_FIT:
-            /* list-based allocators share free logic */
             first_fit_free(ptr);
             break;
 

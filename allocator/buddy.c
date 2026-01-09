@@ -11,9 +11,6 @@ static metadata_t* freelist[MAX_ORDERS];
 static void* heap_base = NULL;
 static size_t heap_limit = 0;
 
-/* =========================
-   Helpers
-   ========================= */
 
 static int order_for_size(size_t size)
 {
@@ -99,7 +96,6 @@ void buddy_init(void* heap_start, size_t heap_size)
     for (int i = 0; i < MAX_ORDERS; i++)
         freelist[i] = NULL;
 
-    /* round DOWN heap size to supported power of two */
     int order = order_for_size(heap_size);
     size_t usable_size = size_for_order(order);
 

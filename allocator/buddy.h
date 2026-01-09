@@ -3,7 +3,6 @@
 
 #include <stddef.h>
 
-/* called once by allocator_init */
 void buddy_init(void *heap_start, size_t heap_size);
 
 void* buddy_malloc(size_t size);

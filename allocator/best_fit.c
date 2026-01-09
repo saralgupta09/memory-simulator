@@ -69,6 +69,5 @@ void* best_fit_malloc(size_t size)
    ============================ */
 void best_fit_free(void* ptr)
 {
-    /* free logic is shared — reuse first_fit_free */
     first_fit_free(ptr);
 }

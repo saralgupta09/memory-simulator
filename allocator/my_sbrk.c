@@ -4,15 +4,9 @@
 #include "allocator_internal.h"
 #include "allocator.h"
 
-/* ===== GLOBAL HEAP STATE (declared, NOT defined) ===== */
-// void* heap = NULL;
-// size_t heap_size = 0;
-
 #define HEAP_SIZE 0x2000   /* 8192 bytes total heap */
 
-/*
- * Emulated sbrk
- */
+
 void* my_sbrk(int increment)
 {
     static char* fake_heap = NULL;
@@ -40,7 +34,7 @@ void* my_sbrk(int increment)
 
     ret = fake_heap + current_top;
     current_top += increment;
-    heap_size += increment;   // stats still read this
+    heap_size += increment;   
 
     return ret;
 }

@@ -20,7 +20,7 @@ void* first_fit_malloc(size_t size)
     {
         if (!curr->in_use && curr->size >= total)
         {
-            /* split if possible */
+            
             if (curr->size >= total + MIN_BLOCK_SIZE)
             {
                 metadata_t* split =
@@ -68,7 +68,6 @@ void first_fit_free(void* ptr)
     block->in_use = 0;
     block->requested_size = 0;
 
-    /* merge with next */
     if (block->next && !block->next->in_use)
     {
         metadata_t* n = block->next;
@@ -78,7 +77,6 @@ void first_fit_free(void* ptr)
             n->next->prev = block;
     }
 
-    /* merge with prev */
     if (block->prev && !block->prev->in_use)
     {
         metadata_t* p = block->prev;

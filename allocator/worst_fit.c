@@ -20,7 +20,6 @@ void* worst_fit_malloc(size_t size)
     metadata_t* curr  = heap_head;
     metadata_t* worst = NULL;
 
-    /* find largest suitable free block */
     while (curr)
     {
         if (!curr->in_use && curr->size >= total)
@@ -65,10 +64,8 @@ void* worst_fit_malloc(size_t size)
 
 /* ============================
    WORST FIT free
-   (delegated to shared free)
    ============================ */
 void worst_fit_free(void* ptr)
 {
-    /* free + coalescing is strategy-independent */
     first_fit_free(ptr);
 }

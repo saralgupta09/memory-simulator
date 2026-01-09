@@ -19,9 +19,6 @@ typedef struct {
 static cli_alloc_t alloc_table[MAX_CLI_ALLOCS];
 static int next_id = 1;
 
-/* =========================
-   Helpers
-   ========================= */
 
 static void print_prompt(void)
 {
@@ -72,9 +69,7 @@ static void clear_alloc(int id)
     }
 }
 
-/* =========================
-   CLI main loop
-   ========================= */
+
 
 void cli_run(void)
 {
